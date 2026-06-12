@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>旅行专家智能体</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11/styles/github-dark.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11/highlight.min.js"></script>
+</head>
+<body>
+    <div class="app-container">
+        <!-- ====== 左侧边栏 ====== -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <button class="new-chat-btn" id="newChatBtn">
+                    <i class="fas fa-plus"></i> 新建聊天
+                </button>
+            </div>
+
+            <!-- 搜索框 -->
+            <div class="search-box">
+                <i class="fas fa-search"></i>
+                <input type="text" placeholder="搜索对话..." id="searchInput">
+            </div>
+
+            <!-- 对话列表 -->
+            <div class="conversation-list" id="conversationList">
+                <!-- 对话分组会由 JS 动态填充 -->
+                <div class="empty-state">
+                    <i class="fas fa-comments"></i>
+                    <p>暂无对话</p>
+                </div>
+            </div>
+
+            <!-- 底部用户区域 -->
+            <div class="sidebar-footer">
+                <div class="user-info" id="userInfo" style="display:none;">
+                    <i class="fas fa-user-circle"></i>
+                    <span id="username"></span>
+                    <button class="logout-btn" id="logoutBtn" title="退出登录">
+                        <i class="fas fa-sign-out-alt"></i>
+                    </button>
+                </div>
+                <button class="login-btn" id="loginBtn">
+                    <i class="fas fa-sign-in-alt"></i> 登录
+                </button>
+            </div>
+        </aside>
+
+        <!-- ====== 主聊天区域 ====== -->
+        <main class="chat-main">
+            <!-- 顶部栏 -->
+            <div class="chat-header">
+                <button class="sidebar-toggle" id="sidebarToggle">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <h1 class="chat-title">旅行专家智能体</h1>
+                <div class="header-actions">
+                    <button class="export-btn" id="exportBtn" title="导出此对话" style="display:none;">
+                        <i class="fas fa-download"></i> 导出此对话
+                    </button>
+
+                </div>
+            </div>
+
+            <!-- 聊天消息区域 -->
+            <div class="chat-messages" id="chatMessages">
+                <!-- 欢迎页面 - 没有对话时显示 -->
+                <div class="welcome-screen" id="welcomeScreen">
+                    <div class="welcome-icon">
+                        <i class="fas fa-plane-departure"></i>
+                    </div>
+                    <h2>你好，我是旅行专家</h2>
+                    <p>告诉我你想去哪里，我来为你规划完美旅程</p>
+                    <div class="quick-prompts">
+                        <button class="prompt-card" data-prompt="帮我规划一个3天的成都之旅">
+                            <i class="fas fa-map-marker-alt"></i>
+                            <span>3天成都之旅</span>
+                        </button>
+                        <button class="prompt-card" data-prompt="推荐几个适合亲子游的海岛">
+                            <i class="fas fa-umbrella-beach"></i>
+                            <span>亲子海岛游</span>
+                        </button>
+                        <button class="prompt-card" data-prompt="日本7天深度游攻略，预算1万5">
+                            <i class="fas fa-torii-gate"></i>
+                            <span>日本深度游</span>
+                        </button>
+                        <button class="prompt-card" data-prompt="云南自驾游路线推荐，10天左右">
+                            <i class="fas fa-car"></i>
+                            <span>云南自驾游</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 输入区域 -->
+            <div class="chat-input-area">
+                <!-- 文件预览区 -->
+                <div class="file-preview-area" id="filePreviewArea" style="display:none;"></div>
+
+                <div class="input-wrapper">
+                    <button class="attach-btn" id="attachBtn" title="添加附件">
+                        <i class="fas fa-paperclip"></i>
+                    </button>
+                    <input type="file" id="fileInput" multiple style="display:none;" accept="image/*,.pdf,.doc,.docx,.txt">
+                    <textarea
+                        id="messageInput"
+                        placeholder="输入你的旅行问题..."
+                        rows="1"
+                    ></textarea>
+                    <button class="send-btn" id="sendBtn" title="发送">
+                    <i class="fas fa-paper-plane" id="sendIcon"></i>
+                    <span class="stop-icon" id="stopIcon" style="display:none;">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                            <rect x="2" y="2" width="12" height="12" rx="3" stroke="currentColor" stroke-width="1.5"/>
+                            <circle cx="8" cy="8" r="3" fill="currentColor"/>
+                        </svg>
+                        </span>
+                    </button>
+
+                </div>
+                <p class="input-hint">旅行专家可能会出错，请核实重要信息</p>
+            </div>
+        </main>
+    </div>
+
+    <!-- ====== 登录/注册弹窗 ====== -->
+    <div class="modal-overlay" id="authModal" style="display:none;">
+        <div class="modal">
+            <button class="modal-close" id="modalClose">
+                <i class="fas fa-times"></i>
+            </button>
+            <div class="modal-tabs">
+                <button class="tab-btn active" data-tab="login">登录</button>
+                <button class="tab-btn" data-tab="register">注册</button>
+            </div>
+
+            <!-- 登录表单 -->
+            <form class="auth-form" id="loginForm">
+                <div class="form-group">
+                    <label><i class="fas fa-user"></i> 用户名</label>
+                    <input type="text" name="username" required placeholder="请输入用户名">
+                </div>
+                <div class="form-group">
+                    <label><i class="fas fa-lock"></i> 密码</label>
+                    <input type="password" name="password" required placeholder="请输入密码">
+                </div>
+                <button type="submit" class="submit-btn">登录</button>
+            </form>
+
+            <!-- 注册表单 -->
+            <form class="auth-form" id="registerForm" style="display:none;">
+                <div class="form-group">
+                    <label><i class="fas fa-user"></i> 用户名</label>
+                    <input type="text" name="username" required placeholder="请输入用户名">
+                </div>
+                <div class="form-group">
+                    <label><i class="fas fa-envelope"></i> 邮箱</label>
+                    <input type="email" name="email" required placeholder="请输入邮箱">
+                </div>
+                <div class="form-group">
+                    <label><i class="fas fa-lock"></i> 密码</label>
+                    <input type="password" name="password" required placeholder="请输入密码">
+                </div>
+                <button type="submit" class="submit-btn">注册</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- ====== 导出弹窗 ====== -->
+<div class="modal-overlay" id="exportModal" style="display:none;">
+    <div class="modal export-modal">
+        <button class="modal-close" id="exportModalClose">
+            <i class="fas fa-times"></i>
+        </button>
+        <h3 class="export-title">导出对话记录</h3>
+        <p class="export-desc">将当前对话导出为 Markdown 文件</p>
+        <button class="export-confirm-btn" id="exportMarkdown">
+            <i class="fab fa-markdown"></i> 确认导出
+        </button>
+    </div>
+</div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
