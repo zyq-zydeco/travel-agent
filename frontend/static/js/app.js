@@ -233,16 +233,24 @@ async function deleteConversation(id) {
     if (!confirm("确定删除这个对话吗？")) return;
 
     try {
-        await fetch(`${API_BASE}/api/chat/conversations/${id}`, {
+        const res = await fetch(`${API_BASE}/api/chat/conversations/${id}`, {
             method: "DELETE",
             headers: { Authorization: `Bearer ${authToken}` },
         });
+
+        if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            alert(errData.detail || "删除失败，请重试");
+            return;
+        }
+
         if (currentConversationId === id) {
             startNewChat();
         }
         loadConversations();
     } catch (err) {
         console.error("删除对话失败:", err);
+        alert("网络错误，删除失败");
     }
 }
 

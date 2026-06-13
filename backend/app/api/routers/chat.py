@@ -14,6 +14,9 @@ from backend.app.schemas.chat import (
     MessageResponse,
     ConversationListResponse,
 )
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/chat", tags=["聊天"])
 
@@ -85,19 +88,40 @@ def delete_conversation(
     db: Session = Depends(get_db),
 ):
     """删除对话及其所有消息"""
-    conversation = (
-        db.query(Conversation)
-        .filter(
-            Conversation.id == conversation_id,
-            Conversation.user_id == current_user.id,
+    try:
+        logger.info(f"用户 {current_user.username}(id={current_user.id}) 请求删除对话 {conversation_id}")
+
+        # 查询对话
+        conversation = (
+            db.query(Conversation)
+            .filter(
+                Conversation.id == conversation_id,
+                Conversation.user_id == current_user.id,
+            )
+            .first()
         )
-        .first()
-    )
-    if not conversation:
-        raise HTTPException(status_code=404, detail="对话不存在")
-    db.delete(conversation)
-    db.commit()
-    return {"message": "对话已删除"}
+        if not conversation:
+            raise HTTPException(status_code=404, detail="对话不存在")
+
+        # 先删除关联的所有消息
+        msg_count = db.query(Message).filter(
+            Message.conversation_id == conversation_id
+        ).delete(synchronize_session=False)
+        logger.info(f"已删除对话 {conversation_id} 下的 {msg_count} 条消息")
+
+        # 再删除对话本身
+        db.delete(conversation)
+        db.commit()
+
+        logger.info(f"对话 {conversation_id} 删除成功")
+        return {"message": "对话已删除", "deleted_messages": msg_count}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"删除对话 {conversation_id} 失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"删除失败: {str(e)}")
 
 
 @router.put("/conversations/{conversation_id}/title")
