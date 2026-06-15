@@ -5,6 +5,17 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from loguru import logger
+
+# 移除默认 handler 并配置自定义格式
+logger.remove()
+logger.add(
+    sys.stderr,
+    format="<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <level><level>{level:<8}</level></level> | <cyan>{name}</cyan>:<cyan>{function}</cyan> - {message}",
+    level="DEBUG",
+    colorize=True,
+)
+
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates

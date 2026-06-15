@@ -1,7 +1,8 @@
 """聊天路由 - 对话管理和消息"""
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
+from pydantic import BaseModel
 from datetime import datetime, timedelta
 from backend.app.core.database import get_db
 from backend.app.core.deps import get_current_user
@@ -190,4 +191,118 @@ def send_message(
     return {
         "conversation_id": request.conversation_id,
         "reply": reply,
+    }
+
+
+# ====== 用户画像 API ======
+
+@router.get("/profile")
+def get_user_profile(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """获取当前用户的旅行画像"""
+    from backend.app.services.memory import get_or_create_profile, format_profile_for_prompt
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    profile = get_or_create_profile(db, current_user.id)
+    
+    return {
+        "user_id": profile.user_id,
+        "preferences": profile.preferences or {},
+        "visited_destinations": profile.visited_destinations or [],
+        "travel_history": profile.travel_history or [],
+        "updated_at": profile.updated_at.isoformat() if profile.updated_at else None,
+        "formatted_for_prompt": format_profile_for_prompt(profile),
+    }
+
+
+@router.put("/profile")
+def update_user_profile(
+    preferences: dict = None,
+    visited_destinations: list = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """手动编辑用户画像"""
+    from backend.app.services.memory import get_or_create_profile
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    profile = get_or_create_profile(db, current_user.id)
+    
+    if preferences is not None:
+        current_prefs = profile.preferences or {}
+        current_prefs.update(preferences)
+        profile.preferences = current_prefs
+    
+    if visited_destinations is not None:
+        current_visited = list(set((profile.visited_destinations or []) + visited_destinations))
+        profile.visited_destinations = current_visited
+    
+    db.commit()
+    logger.info(f"用户 {current_user.username} 手动更新了画像")
+    
+    return {
+        "message": "画像已更新",
+        "preferences": profile.preferences,
+        "visited_destinations": profile.visited_destinations,
+    }
+
+
+# ====== 反馈 API ======
+
+class FeedbackRequest(BaseModel):
+    message_id: Optional[int] = None
+    rating: int  # 1=点赞, -1=点踩
+    feedback_text: Optional[str] = None
+
+
+@router.post("/feedback")
+def submit_feedback(
+    request: FeedbackRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    提交对 AI 回复的反馈。
+    
+    rating: 1 表示点赞（正面反馈），-1 表示点踩（负面反馈）
+    反馈将用于 Self-Improvement 经验积累。
+    """
+    from backend.app.models.experience_log import ExperienceLog
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    if request.rating not in (1, -1, 0):
+        raise HTTPException(status_code=400, detail="rating 必须为 1（点赞）、-1（点踩）或 0（中立）")
+    
+    # 如果提供了 message_id，尝试找到对应的 experience log 并更新评分
+    if request.message_id:
+        # 尝试查找最近的匹配 experience log（通过关联方式）
+        # 这里简化处理：直接创建一条新的反馈记录
+        pass
+    
+    # 创建或更新反馈记录
+    feedback_record = ExperienceLog(
+        user_id=current_user.id,
+        task_type="user_feedback",
+        query_summary=f"用户反馈: rating={request.rating}",
+        result_rating=max(0, (request.rating + 1) * 2 + 1) if request.rating != 0 else 3,  # 转换为 1-5 分
+        feedback=request.feedback_text,
+        lesson_learned=(
+            f"用户{'点赞' if request.rating == 1 else '点踩'}了本次回复。"
+            f"{f'反馈内容: {request.feedback_text}' if request.feedback_text else ''}"
+        ),
+    )
+    db.add(feedback_record)
+    db.commit()
+    
+    action = "点赞 👍" if request.rating == 1 else "点踩 👎" if request.rating == -1 else "中立"
+    logger.info(f"用户 {current_user.username} 提交反馈: {action}")
+    
+    return {
+        "message": f"感谢您的{action}！",
+        "feedback_id": feedback_record.id,
     }

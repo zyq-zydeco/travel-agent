@@ -955,3 +955,121 @@ body {
 .send-btn.stopping:hover {
     background: rgba(255, 255, 255, 0.2);
 }
+
+/* ====== 反馈按钮样式 ====== */
+.feedback-bar {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(128, 128, 128, 0.15);
+}
+
+.feedback-btn {
+    background: none;
+    border: 1px solid rgba(128, 128, 128, 0.3);
+    border-radius: 6px;
+    padding: 4px 10px;
+    cursor: pointer;
+    color: #888;
+    font-size: 13px;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.feedback-btn:hover {
+    border-color: rgba(128, 128, 128, 0.6);
+    color: #666;
+    background: rgba(128, 128, 128, 0.05);
+}
+
+.feedback-btn.like-btn.active {
+    border-color: #10a37f;
+    color: #10a37f;
+    background: rgba(16, 163, 127, 0.1);
+}
+
+.feedback-btn.dislike-btn.active {
+    border-color: #ef4444;
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.1);
+}
+
+/* ====== 搜索指示器（流式输出中工具调用状态）====== */
+.search-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    margin-top: 12px;
+    color: #10a37f;
+    font-size: 14px;
+    line-height: 1.5;
+    background: rgba(16, 163, 127, 0.08);
+    border-radius: 8px;
+    border-left: 3px solid #10a37f;
+}
+
+.search-indicator i.fa-spinner {
+    font-size: 13px;
+    animation: spin 0.8s linear infinite;
+}
+
+.search-indicator span {
+    opacity: 0.85;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* ====== 思考过程样式（参考 DeepSeek）====== */
+.thinking-block {
+    margin: 10px 0;
+    padding: 12px 16px;
+    background: rgba(110, 118, 129, 0.08);
+    border-radius: 8px;
+    border-left: 3px solid #484f58;
+    overflow: hidden;
+}
+
+.thinking-block .thinking-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: #8b949e;
+    font-weight: 500;
+    margin-bottom: 6px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.thinking-block .thinking-label:hover {
+    color: #a8b2c1;
+}
+
+.thinking-block .thinking-content {
+    font-size: 13px;
+    color: #8b949e;
+    line-height: 1.7;
+}
+
+/* 思考块内的 Markdown 元素继承浅色 */
+.thinking-block .thinking-content p,
+.thinking-block .thinking-content li {
+    color: #8b949e !important;
+    font-size: 13px !important;
+}
+
+.thinking-block .thinking-content strong {
+    color: #9ca3af !important;
+}
+
+/* 回答区域 - 保持正常样式 */
+.answer-block {
+    /* answer-block 本身不需要额外样式，内容正常渲染 */
+}

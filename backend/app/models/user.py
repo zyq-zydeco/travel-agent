@@ -18,3 +18,6 @@ class User(Base):
 
     # 关联用户的对话列表，删除用户时级联删除所有对话
     conversations = relationship("Conversation", back_populates="user", cascade="all, delete-orphan")
+
+    # 关联用户画像
+    profile = relationship("UserProfile", back_populates="user", uselist=False, cascade="all, delete-orphan")

@@ -370,11 +370,22 @@ function appendMessage(role, content) {
 
     const div = document.createElement("div");
     div.className = `message ${msgClass}`;
+    div.dataset.role = role;  // 保存角色信息供后续使用
     div.innerHTML = `
         <div class="message-avatar">
             <i class="fas ${icon}"></i>
         </div>
-        <div class="message-content">${formatContent(content)}</div>`;
+        <div class="message-content">${formatContent(content)}</div>
+        ${role === "assistant" ? `
+        <div class="feedback-bar" data-message-id="">
+            <button class="feedback-btn like-btn" title="有帮助" onclick="submitFeedback(this, 1)">
+                <i class="fas fa-thumbs-up"></i>
+            </button>
+            <button class="feedback-btn dislike-btn" title="没帮助" onclick="submitFeedback(this, -1)">
+                <i class="fas fa-thumbs-down"></i>
+            </button>
+        </div>
+        ` : ""}`;
     chatMessages.appendChild(div);
     scrollToBottom();
     return div;
@@ -515,17 +526,36 @@ async function sendMessage() {
                         contentDiv.innerHTML = formatContent(fullReply);
                         scrollToBottom();
                     } else if (data.type === "tool_start") {
-                        // 显示搜索提示
-                        if (fullReply === "") {
-                            contentDiv.innerHTML = "";
+                        // 搜索开始：在已有内容末尾追加搜索指示器（不覆盖已有内容）
+                        const toolName = data.tool || "搜索";
+                        const indicator = document.createElement("div");
+                        indicator.className = "search-indicator";
+                        indicator.id = "searchIndicator";
+                        const toolLabelMap = {
+                            "web_search": "正在搜索最新信息",
+                            "weather_search": "正在查询天气",
+                            "exchange_rate": "正在查询汇率",
+                            "visa_policy_search": "正在查询签证政策",
+                            "amap_poi_search": "正在搜索地点信息",
+                            "amap_route_planning": "正在规划路线",
+                            "amap_geocode": "正在查询地理位置",
+                            "tavily-search": "正在搜索最新信息",
+                        };
+                        const label = toolLabelMap[toolName] || `正在${toolName}`;
+                        indicator.innerHTML = `<i class="fas fa-spinner fa-spin"></i> <span>${label}...</span>`;
+                        
+                        // 如果已有内容，追加；否则直接显示
+                        if (fullReply.length > 0) {
+                            contentDiv.appendChild(indicator);
+                        } else {
+                            contentDiv.appendChild(indicator);
                         }
-                        const searchHint = `<span style="color:#10a37f;">🔍 正在搜索最新信息...</span><br>`;
-                        contentDiv.innerHTML = searchHint;
                         scrollToBottom();
                     } else if (data.type === "tool_end") {
-                        // 搜索完成，清空搜索提示，等待 AI 回复
-                        if (fullReply === "") {
-                            contentDiv.innerHTML = "";
+                        // 搜索完成：仅移除搜索指示器，保留已有内容
+                        const existingIndicator = document.getElementById("searchIndicator");
+                        if (existingIndicator) {
+                            existingIndicator.remove();
                         }
                     } else if (data.type === "sources") {
                         collectedSources = data.sources;
@@ -623,6 +653,25 @@ function escapeHtml(text) {
 }
 
 function formatContent(text) {
+    // 先解析【思考】...【回答】标签，转换为 HTML 结构
+    let processedText = text;
+    
+    // 匹配 【思考】...【回答】 模式（支持多行、多个匹配）
+    // 使用非贪婪匹配，确保每个【思考】对应最近的【回答】
+    const thinkAnswerRegex = /【思考】([\s\S]*?)【回答】([\s\S]*)/g;
+    let hasThinkingBlock = false;
+    
+    processedText = text.replace(thinkAnswerRegex, function(match, thinkingContent, answerContent) {
+        hasThinkingBlock = true;
+        // 将思考内容包裹在特殊标记中，后续由 CSS 样式化
+        return '<div class="thinking-block"><div class="thinking-label">💭 思考过程</div><div class="thinking-content">' + thinkingContent + '</div></div><div class="answer-block">' + answerContent + '</div>';
+    });
+    
+    // 如果没有找到标签但有【思考】，说明只有思考没有回答（异常情况，全部作为正常内容）
+    if (!hasThinkingBlock && text.includes("【思考】")) {
+        processedText = text.replace(/【思考】/g, '').replace(/【回答】/g, '');
+    }
+    
     if (typeof marked !== "undefined") {
         marked.setOptions({
             breaks: true,
@@ -636,10 +685,10 @@ function formatContent(text) {
                 return code;
             }
         });
-        return marked.parse(text);
+        return marked.parse(processedText);
     }
     // 降级处理：如果没有加载 marked 库
-    return text
+    return processedText
         .replace(/\n/g, "<br>")
         .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
 }
@@ -742,4 +791,59 @@ function updateSendButton() {
         sendBtn.title = "发送";
         messageInput.placeholder = "输入你的旅行问题...";
     }
+}
+
+// ====== 反馈功能 ======
+let submittedFeedbacks = new Set(); // 已提交的反馈 ID 防止重复
+
+function submitFeedback(btn, rating) {
+    const feedbackBar = btn.closest(".feedback-bar");
+    if (!feedbackBar) return;
+
+    const barId = feedbackBar.dataset.messageId || Math.random().toString(36);
+
+    // 防止重复提交
+    if (submittedFeedbacks.has(barId)) return;
+
+    const feedbackText = ""; // 可扩展：弹出输入框让用户填写详细反馈
+
+    fetch(`${API_BASE}/api/chat/feedback`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${authToken}`,
+        },
+        body: JSON.stringify({
+            rating: rating,
+            feedback_text: feedbackText || undefined,
+        }),
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (res.ok) {
+            // 标记已提交
+            submittedFeedbacks.add(barId);
+
+            // 切换按钮状态
+            const buttons = feedbackBar.querySelectorAll(".feedback-btn");
+            buttons.forEach(b => b.classList.remove("active"));
+            btn.classList.add("active");
+
+            // 显示短暂提示
+            const originalTitle = btn.title;
+            btn.title = rating === 1 ? "已点赞 ✓" : "已收到反馈 ✓";
+
+            // 短暂高亮
+            btn.style.transform = "scale(1.2)";
+            setTimeout(() => {
+                btn.style.transform = "";
+            }, 200);
+        } else {
+            alert(data.detail || "反馈提交失败，请重试");
+        }
+    })
+    .catch(err => {
+        console.error("提交反馈失败:", err);
+        alert("网络错误，反馈未提交");
+    });
 }

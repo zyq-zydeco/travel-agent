@@ -23,6 +23,15 @@ class Settings(BaseSettings):
     # Tavily 搜索 API
     TAVILY_API_KEY: str = ""
 
+    # 天气 API（OpenWeatherMap）
+    WEATHER_API_KEY: str = ""
+
+    # 汇率 API（Open Exchange Rates，留空则使用内置固定汇率）
+    OPEN_EXCHANGE_KEY: str = ""
+
+    # 高德地图 API（Web 服务类型）
+    AMAP_API_KEY: str = ""
+
     @property
     def DATABASE_URL(self) -> str:
         return f"mysql+pymysql://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
