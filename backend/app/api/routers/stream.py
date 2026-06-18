@@ -28,6 +28,7 @@ from backend.app.services.memory import (
     retrieve_relevant_experiences,
 )
 from backend.app.services.context import classify_intent, build_system_prompt, compress_long_context
+from backend.app.services.output_formatter import format_output_pipeline
 
 router = APIRouter(prefix="/api/chat", tags=["流式聊天"])
 
@@ -226,16 +227,31 @@ async def stream_chat(
             f"回复长度={len(full_reply)} | TTFT={ttft:.2f}s | 总耗时={total_time:.2f}s"
         )
         
-        # ========== 4. 保存 AI 回复 ==========
+        # ========== 4. 输出后处理 + 保存 AI 回复 ==========
         
         if full_reply:
+            # 调用格式化输出流水线：截断 → 格式修复 → 结构校验
+            processed_reply = format_output_pipeline(full_reply, intent)
+            
+            # 如果处理后的内容有变化，记录日志
+            if processed_reply != full_reply:
+                logger.info(
+                    f"输出后处理: 原始长度={len(full_reply)}, "
+                    f"处理后长度={len(processed_reply)}, "
+                    f"差异={len(full_reply) - len(processed_reply)} 字符"
+                )
+            
+            # 保存处理后的 AI 回复到数据库
             ai_msg = Message(
                 conversation_id=request.conversation_id,
                 role="assistant",
-                content=full_reply,
+                content=processed_reply,  # 使用处理后的版本
             )
             db.add(ai_msg)
             db.commit()
+            
+            # 更新 full_reply 为处理后的版本（用于后续经验分析等）
+            full_reply = processed_reply
         
         # ========== 5. 发送来源和完成信号 ==========
         

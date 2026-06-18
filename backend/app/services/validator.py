@@ -8,6 +8,15 @@ import re
 import logging
 from typing import List, Tuple, Dict, Any
 from dataclasses import dataclass, field
+from backend.app.services.output_formatter import (
+    format_repair,
+    extract_thinking_answer,
+    validate_structure as formatter_validate,
+    TravelPlanOutput,
+    WeatherOutput,
+    BudgetOutput,
+    GeneralQAOutput,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -61,11 +70,22 @@ class OutputValidator:
         fact_issues = self.fact_check(response)
         format_issues = self.format_check(response, intent_type)
         consistency_issues = self.consistency_check(response)
-        
+        schema_issues = self.schema_validate(response, intent_type)
+
         result.issues.extend(fact_issues)
         result.issues.extend(format_issues)
         result.issues.extend(consistency_issues)
-        
+        result.issues.extend(schema_issues)
+
+        # 格式修复检测（仅记录，不阻断）
+        repair_check = self.format_repair_check(response)
+        if repair_check["has_issues"]:
+            for issue in repair_check["repairable_issues"]:
+                if issue["auto_fixable"]:
+                    result.warnings.append(f"[可自动修复] {issue['description']}")
+                else:
+                    result.warnings.append(f"[需人工检查] {issue['description']}")
+
         # 判断整体有效性
         critical_issues = [i for i in result.issues if i.startswith("[严重]")]
         if critical_issues:
@@ -188,6 +208,120 @@ class OutputValidator:
             issues.append("[提示] 回复中出现多次预算汇总，请确认无重复计算")
         
         return issues
+
+    def schema_validate(self, response: str, intent_type: str = "qa") -> List[str]:
+        """
+        基于 Pydantic Schema 的结构校验。
+
+        尝试将文本输出与对应意图类型的 Schema 进行启发式匹配，
+        检查是否包含 Schema 要求的关键字段/结构元素。
+
+        参数:
+            response: AI 生成的回复文本
+            intent_type: 任务类型 (qa/planning/search/complex)
+
+        返回:
+            问题列表（空列表表示通过）
+        """
+        issues = []
+
+        # 先调用 output_formatter 的通用结构校验
+        fmt_result = formatter_validate(response, intent_type)
+        if not fmt_result["is_valid"]:
+            issues.extend(fmt_result["issues"])
+
+        # 额外的 Schema 级别检查
+        if intent_type in ("planning", "complex"):
+            # 检查行程规划类输出是否包含必要结构元素
+            has_day_marker = bool(re.search(r'(?:Day\s*\d+|第?\d+[天日]|\d+月\d+日)', response, re.IGNORECASE))
+            has_cost_info = bool(self.price_pattern.search(response))
+
+            if not has_day_marker:
+                issues.append("[Schema] 行程规划输出缺少日期/天数标识（如 Day 1、第一天等）")
+            if not has_cost_info:
+                issues.append("[提示] 行程规划建议包含费用信息")
+
+        if intent_type in ("search",) and "天气" in response[:50]:
+            # 天气类查询检查
+            has_temp = bool(re.search(r'\d+.*?[°Cc]', response))
+            has_date = bool(self.date_pattern.search(response))
+            if not has_temp:
+                issues.append("[Schema] 天气查询输出缺少温度数据")
+            if not has_date:
+                issues.append("[Schema] 天气查询输出缺少日期信息")
+
+        return issues
+
+    def format_repair_check(self, response: str) -> dict:
+        """
+        检测可自动修复的格式问题。
+
+        分析回复文本中的格式缺陷，返回可修复的问题清单和建议。
+        此方法只做检测不执行修复，供调用方决定是否修复。
+
+        参数:
+            response: AI 生成的回复文本
+
+        返回:
+            {
+                "has_issues": bool,
+                "repairable_issues": list[dict],  # 每项含 {"type": str, "description": str, "auto_fixable": bool}
+                "needs_truncate": bool,
+            }
+        """
+        result = {
+            "has_issues": False,
+            "repairable_issues": [],
+            "needs_truncate": len(response) > 8000,
+        }
+
+        issues = result["repairable_issues"]
+
+        # 检测未闭合代码块
+        code_block_count = response.count("```")
+        if code_block_count % 2 == 1:
+            issues.append({
+                "type": "unclosed_code_block",
+                "description": f"检测到 {code_block_count} 个代码块标记（奇数个），存在未闭合的代码块",
+                "auto_fixable": True,
+            })
+            result["has_issues"] = True
+
+        # 检测连续过多空行（3 个及以上）
+        if "\n\n\n\n" in response:
+            count = response.count("\n\n\n\n")
+            issues.append({
+                "type": "excessive_blank_lines",
+                "description": f"检测到 {count} 处超过 3 个连续空行",
+                "auto_fixable": True,
+            })
+            result["has_issues"] = True
+
+        # 检测缺失【思考】或【回答】标签
+        has_thinking = "【思考】" in response
+        has_answer = "【回答】" in response
+        if not has_answer and len(response) > 100:
+            # 较长的回复应该有标签
+            issues.append({
+                "type": "missing_tags",
+                "description": "回复内容较长但缺少【回答】标签",
+                "auto_fixable": True,  # 可以自动补全【回答】包裹
+            })
+            result["has_issues"] = True
+
+        # 检测表格格式问题（有 | 但可能缺分隔行）
+        if "|" in response and "---" not in response:
+            # 可能有表格但缺少表头分隔行
+            lines_with_pipe = [l for l in response.split("\n") if "|" in l and l.strip().startswith("|")]
+            if len(lines_with_pipe) >= 2:
+                issues.append({
+                    "type": "malformed_table",
+                    "description": f"检测到 {len(lines_with_pipe)} 行表格内容但缺少 --- 分隔行",
+                    "auto_fixable": False,  # 表格修复需要语义理解，不建议自动修
+                })
+                result["has_issues"] = True
+
+        return result
 
 
 def validate_response(response: str, intent_type: str = "qa") -> Tuple[bool, List[str]]:

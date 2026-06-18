@@ -1073,3 +1073,143 @@ body {
 .answer-block {
     /* answer-block 本身不需要额外样式，内容正常渲染 */
 }
+
+/* ====== 输出格式化增强样式 ====== */
+
+/* 思考块长内容滚动 */
+.thinking-block .thinking-content {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.thinking-block .thinking-content::-webkit-scrollbar {
+    width: 4px;
+}
+
+.thinking-block .thinking-content::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.thinking-block .thinking-content::-webkit-scrollbar-thumb {
+    background: rgba(136, 153, 166, 0.3);
+    border-radius: 2px;
+}
+
+/* ====== 思考块折叠交互样式 ====== */
+
+.thinking-label {
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.2s ease;
+    border-radius: 6px;
+    padding: 8px 12px !important;
+    margin-bottom: 0 !important;
+}
+
+.thinking-label:hover {
+    background: rgba(110, 118, 129, 0.12);
+}
+
+.thinking-toggle-icon {
+    display: inline-block;
+    font-size: 10px;
+    margin-right: 6px;
+    transition: transform 0.2s ease;
+    color: #8b949e;
+}
+
+/* 折叠状态：思考块紧凑显示 */
+.thinking-collapsed {
+    max-height: 40px !important;
+    overflow: hidden;
+    border-radius: 8px;
+    transition: max-height 0.3s ease;
+}
+
+.thinking-collapsed .thinking-label {
+    font-size: 13px;
+    color: #8b949e;
+}
+
+/* 展开状态 */
+.thinking-block:not(.thinking-collapsed) {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.thinking-block:not(.thinking-collapsed) .thinking-toggle-icon {
+    transform: rotate(0deg);
+}
+
+.thinking-collapsed .thinking-toggle-icon {
+    /* 折叠时箭头向右 */
+}
+
+/* 回答块基础样式 */
+.answer-block {
+    margin-top: 8px;
+}
+
+/* Markdown 表格响应式：超出宽度时横向滚动 */
+.answer-block table,
+.message-content table {
+    display: block;
+    overflow-x: auto;
+    max-width: 100%;
+    white-space: nowrap;
+    border-collapse: collapse;
+    margin: 12px 0;
+    font-size: 14px;
+}
+
+.answer block th,
+.answer-block th,
+.message-content th {
+    background: rgba(16, 163, 127, 0.08);
+    color: #10a37f;
+    font-weight: 600;
+    padding: 8px 12px;
+    text-align: left;
+    border-bottom: 2px solid #10a37f;
+}
+
+.answer-block td,
+.message-content td {
+    padding: 8px 12px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.answer-block tr:hover td,
+.message-content tr:hover td {
+    background: rgba(0, 0, 0, 0.02);
+}
+
+/* 代码块优化 */
+.answer-block pre,
+.message-content pre {
+    background: #1e1e1e;
+    color: #d4d4d4;
+    border-radius: 8px;
+    padding: 16px;
+    overflow-x: auto;
+    margin: 12px 0;
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+.answer-block code,
+.message-content code {
+    background: rgba(0, 0, 0, 0.06);
+    color: #eb5757;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.9em;
+}
+
+.answer-block pre code,
+.message-content pre code {
+    background: transparent;
+    color: inherit;
+    padding: 0;
+    font-size: inherit;
+}

@@ -79,9 +79,9 @@ def _search_weather_fallback(city: str) -> str:
                 output.append(r.get("content", ""))
             else:
                 output.append(str(r))
-        return f"[降级模式] 通过搜索获取的 {city} 天气信息：\n" + "\n\n".join(output)
+        return "[WEATHER_RESULT]\n" + f"[降级模式] 通过搜索获取的 {city} 天气信息：\n" + "\n\n".join(output)
     except Exception as e:
-        return f"抱歉，无法获取 {city} 的天气信息：{str(e)}"
+        return "[WEATHER_RESULT]\n" + f"抱歉，无法获取 {city} 的天气信息：{str(e)}"
 
 
 def _call_weather_api(city: str) -> str:
@@ -113,7 +113,7 @@ def _call_weather_api(city: str) -> str:
                     temp = item["main"].get("temp", "?")
                     humidity = item["main"].get("humidity", "?")
                     lines.append(f"📅 {dt}: {desc}，约{temp}°C，湿度{humidity}%")
-            return "\n".join(lines)
+            return "[WEATHER_RESULT]\n" + "\n".join(lines)
 
         # API 返回非 200 则降级到搜索
         return _search_weather_fallback(city)
@@ -164,16 +164,16 @@ def _convert_exchange(amount: float, from_currency: str, to_currency: str) -> st
                 elif from_upper in rates:
                     usd_amount = amount / rates[from_upper]
                 else:
-                    return f"不支持的货币: {from_upper}"
+                    return "[EXCHANGE_RESULT]\n" + f"不支持的货币: {from_upper}"
 
                 if to_upper == "USD":
                     result = usd_amount
                 elif to_upper in rates:
                     result = usd_amount * rates[to_upper]
                 else:
-                    return f"不支持的货币: {to_upper}"
+                    return "[EXCHANGE_RESULT]\n" + f"不支持的货币: {to_upper}"
 
-                return (
+                return "[EXCHANGE_RESULT]\n" + (
                     f"💱 汇率换算结果（实时数据）：\n"
                     f"{amount:.2f} {from_upper} = {result:.2f} {to_upper}\n"
                     f"数据来源: Open Exchange Rates，仅供参考，实际以银行汇率为准"
@@ -200,7 +200,7 @@ def _convert_exchange(amount: float, from_currency: str, to_currency: str) -> st
     elif from_upper in reverse_rates:
         amount_in_cny = amount * reverse_rates[from_upper]
     else:
-        return f"❌ 不支持的货币代码: {from_upper}。支持的常见货币: USD/EUR/JPY/GBP/HKD/TWD/KRW/THB/MYR/AUD/CAD"
+        return "[EXCHANGE_RESULT]\n" + f"❌ 不支持的货币代码: {from_upper}。支持的常见货币: USD/EUR/JPY/GBP/HKD/TWD/KRW/THB/MYR/AUD/CAD"
 
     # 再从人民币转为目标货币
     if to_upper == "CNY":
@@ -208,9 +208,9 @@ def _convert_exchange(amount: float, from_currency: str, to_currency: str) -> st
     elif to_upper in reverse_rates:
         final_amount = amount_in_cny * reverse_rates[to_upper]
     else:
-        return f"❌ 不支持的货币代码: {to_upper}。支持的常见货币: USD/EUR/JPY/GBP/HKD/TWD/KRW/THB/MYR/AUD/CAD"
+        return "[EXCHANGE_RESULT]\n" + f"❌ 不支持的货币代码: {to_upper}。支持的常见货币: USD/EUR/JPY/GBP/HKD/TWD/KRW/THB/MYR/AUD/CAD"
 
-    return (
+    return "[EXCHANGE_RESULT]\n" + (
         f"💱 汇率换算结果（参考汇率）：\n"
         f"{amount:.2f} {from_upper} ≈ {final_amount:.2f} {to_upper}\n"
         f"⚠️ 使用的是参考汇率，实际交易请以银行实时汇率为准"
@@ -273,18 +273,18 @@ def _search_visa_policy(destination: str, nationality: str = "中国") -> str:
 
         output_parts.append("\n⚠️ 以上信息来自网络搜索，签证政策可能随时变化，请以官方渠道最新公告为准。")
 
-        return "\n".join(output_parts)
+        return "[VISA_RESULT]\n" + "\n".join(output_parts)
 
     except ImportError:
         # 降级处理
-        return (
+        return "[VISA_RESULT]\n" + (
             f"⚠️ 无法查询 {destination} 的签证政策信息。\n"
             f"建议访问以下官方渠道确认：\n"
             f"- 目的地国家驻华大使馆官网\n"
             f"- 外交部领事服务网: cs.mfa.gov.cn"
         )
     except Exception as e:
-        return f"查询签证政策时出错: {str(e)}"
+        return "[VISA_RESULT]\n" + f"查询签证政策时出错: {str(e)}"
 
 
 visa_policy_tool = StructuredTool.from_function(
@@ -349,9 +349,9 @@ def _amap_poi_fallback(city: str, keywords: str) -> str:
                     output.append(f"   来源: {url}")
             else:
                 output.append(f"\n{i}. {str(r)[:300]}")
-        return "\n".join(output)
+        return "[AMAP_POI_RESULT]\n" + "\n".join(output)
     except Exception as e:
-        return f"抱歉，无法搜索 {keywords} 信息：{str(e)}"
+        return "[AMAP_POI_RESULT]\n" + f"抱歉，无法搜索 {keywords} 信息：{str(e)}"
 
 
 def _call_amap_poi(city: str, keywords: str, types: str = "", offset: int = 8) -> str:
@@ -359,7 +359,7 @@ def _call_amap_poi(city: str, keywords: str, types: str = "", offset: int = 8) -
     api_key = getattr(settings, 'AMAP_API_KEY', '')
     
     if not api_key:
-        return (
+        return "[AMAP_POI_RESULT]\n" + (
             "⚠️ 高德地图 API Key 未配置。\n"
             "请在 .env 文件中设置 AMAP_API_KEY 以启用精确的地点搜索功能。\n"
             "注册地址: https://lbs.amap.com/\n\n"
@@ -384,11 +384,11 @@ def _call_amap_poi(city: str, keywords: str, types: str = "", offset: int = 8) -
         
         if data.get("status") != "1":
             error_info = data.get("info", "未知错误")
-            return f"⚠️ 高德地图搜索失败: {error_info}\n" + _amap_poi_fallback(city, keywords)
-        
+            return "[AMAP_POI_RESULT]\n" + f"⚠️ 高德地图搜索失败: {error_info}\n" + _amap_poi_fallback(city, keywords)
+
         pois = data.get("pois", [])
         if not pois:
-            return f"📍 在 {city} 未找到与「{keywords}」相关的结果。建议换个关键词试试。"
+            return "[AMAP_POI_RESULT]\n" + f"📍 在 {city} 未找到与「{keywords}」相关的结果。建议换个关键词试试。"
         
         type_label = AMAP_TYPE_LABELS.get(types, types or "地点")
         lines = [f"📍 {city} · {keywords}相关{type_label}（数据来源：高德地图）\n"]
@@ -427,12 +427,12 @@ def _call_amap_poi(city: str, keywords: str, types: str = "", offset: int = 8) -
         if int(total) > offset:
             lines.append(f"\n📊 共找到 {total} 个结果，显示前 {offset} 条。")
         
-        return "\n\n".join(lines)
+        return "[AMAP_POI_RESULT]\n" + "\n\n".join(lines)
     
     except requests.exceptions.Timeout:
-        return "⚠️ 高德地图请求超时，已自动切换为搜索模式\n" + _amap_poi_fallback(city, keywords)
+        return "[AMAP_POI_RESULT]\n" + "⚠️ 高德地图请求超时，已自动切换为搜索模式\n" + _amap_poi_fallback(city, keywords)
     except Exception as e:
-        return f"⚠️ 高德地图搜索出错: {str(e)}\n" + _amap_poi_fallback(city, keywords)
+        return "[AMAP_POI_RESULT]\n" + f"⚠️ 高德地图搜索出错: {str(e)}\n" + _amap_poi_fallback(city, keywords)
 
 
 amap_poi_tool = StructuredTool.from_function(
@@ -497,9 +497,9 @@ def _amap_route_fallback(origin: str, destination: str, mode: str) -> str:
                 output.append(r.get("content", "")[:400])
             else:
                 output.append(str(r)[:400])
-        return "\n".join(output)
+        return "[AMAP_ROUTE_RESULT]\n" + "\n".join(output)
     except Exception as e:
-        return f"抱歉，无法获取路线信息: {e}"
+        return "[AMAP_ROUTE_RESULT]\n" + f"抱歉，无法获取路线信息: {e}"
 
 
 def _call_amap_route(origin: str, destination: str, mode: str = "driving") -> str:
@@ -507,7 +507,7 @@ def _call_amap_route(origin: str, destination: str, mode: str = "driving") -> st
     api_key = getattr(settings, 'AMAP_API_KEY', '')
     
     if not api_key:
-        return (
+        return "[AMAP_ROUTE_RESULT]\n" + (
             "⚠️ 高德地图 API Key 未配置。\n"
             "请在 .env 中设置 AMAP_API_KEY 以启用路线规划功能。\n"
             "注册地址: https://lbs.amap.com/\n\n"
@@ -534,11 +534,11 @@ def _call_amap_route(origin: str, destination: str, mode: str = "driving") -> st
         
         if data.get("status") != "1":
             error_info = data.get("info", "未知错误")
-            return f"⚠️ 路线规划失败: {error_info}\n" + _amap_route_fallback(origin, destination, mode)
+            return "[AMAP_ROUTE_RESULT]\n" + f"⚠️ 路线规划失败: {error_info}\n" + _amap_route_fallback(origin, destination, mode)
         
         routes = data.get("route", {}).get("routes", [])
         if not routes:
-            return f"❌ 无法规划从「{origin}」到「{destination}」的{MODE_LABELS.get(mode, '')}路线。请检查地名是否正确。"
+            return "[AMAP_ROUTE_RESULT]\n" + f"❌ 无法规划从「{origin}」到「{destination}」的{MODE_LABELS.get(mode, '')}路线。请检查地名是否正确。"
         
         route = routes[0]  # 取最佳路线
         distance_m = route.get("distance", 0)
@@ -617,12 +617,12 @@ def _call_amap_route(origin: str, destination: str, mode: str = "driving") -> st
                         if w_dist > 0:
                             lines.append(f"  🚶 步行 {w_dist}米")
         
-        return "\n".join(lines)
+        return "[AMAP_ROUTE_RESULT]\n" + "\n".join(lines)
     
     except requests.exceptions.Timeout:
-        return "⚠️ 高德地图请求超时\n" + _amap_route_fallback(origin, destination, mode)
+        return "[AMAP_ROUTE_RESULT]\n" + "⚠️ 高德地图请求超时\n" + _amap_route_fallback(origin, destination, mode)
     except Exception as e:
-        return f"⚠️ 路线规划出错: {str(e)}\n" + _amap_route_fallback(origin, destination, mode)
+        return "[AMAP_ROUTE_RESULT]\n" + f"⚠️ 路线规划出错: {str(e)}\n" + _amap_route_fallback(origin, destination, mode)
 
 
 amap_route_tool = StructuredTool.from_function(
@@ -653,7 +653,7 @@ def _call_amap_geocode(address: str = None, location: str = None) -> str:
     api_key = getattr(settings, 'AMAP_API_KEY', '')
     
     if not api_key:
-        return (
+        return "[AMAP_GEOCODE_RESULT]\n" + (
             "⚠️ 高德地图 API Key 未配置。\n"
             "请在 .env 中设置 AMAP_API_KEY 以启用地理编码功能。\n"
             "注册地址: https://lbs.amap.com/"
@@ -672,11 +672,11 @@ def _call_amap_geocode(address: str = None, location: str = None) -> str:
             data = res.json()
             
             if data.get("status") != "1":
-                return f"⚠️ 地理编码失败: {data.get('info', '未知错误')}"
+                return "[AMAP_GEOCODE_RESULT]\n" + f"⚠️ 地理编码失败: {data.get('info', '未知错误')}"
             
             geocodes = data.get("geocodes", [])
             if not geocodes:
-                return f"❌ 未找到地址「{address}」对应的坐标。请检查地址是否正确。"
+                return "[AMAP_GEOCODE_RESULT]\n" + f"❌ 未找到地址「{address}」对应的坐标。请检查地址是否正确。"
             
             geo = geocodes[0]
             formatted_addr = geo.get("formatted_address", address)
@@ -700,7 +700,7 @@ def _call_amap_geocode(address: str = None, location: str = None) -> str:
             if adcode:
                 lines.append(f"🔢 行政区划码: {adcode}")
             
-            return "\n".join(lines)
+            return "[AMAP_GEOCODE_RESULT]\n" + "\n".join(lines)
         
         # 逆地理编码：坐标 → 地址
         elif location and not address:
@@ -715,7 +715,7 @@ def _call_amap_geocode(address: str = None, location: str = None) -> str:
             data = res.json()
             
             if data.get("status") != "1":
-                return f"⚠️ 逆地理编码失败: {data.get('info', '未知错误')}"
+                return "[AMAP_GEOCODE_RESULT]\n" + f"⚠️ 逆地理编码失败: {data.get('info', '未知错误')}"
             
             regeocode = data.get("regeocode", {})
             formatted_addr = regeocode.get("formatted_address", location)
@@ -757,15 +757,15 @@ def _call_amap_geocode(address: str = None, location: str = None) -> str:
                 if cr_name:
                     lines.append(f"🔀 附近路口: {cr_name}")
             
-            return "\n".join(lines)
+            return "[AMAP_GEOCODE_RESULT]\n" + "\n".join(lines)
         
         else:
-            return "❌ 请提供 address（地址）或 location（坐标）其中之一，不能同时为空或同时填写。"
+            return "[AMAP_GEOCODE_RESULT]\n" + "❌ 请提供 address（地址）或 location（坐标）其中之一，不能同时为空或同时填写。"
     
     except requests.exceptions.Timeout:
-        return "⚠️ 高德地图请求超时"
+        return "[AMAP_GEOCODE_RESULT]\n" + "⚠️ 高德地图请求超时"
     except Exception as e:
-        return f"⚠️ 地理编码出错: {str(e)}"
+        return "[AMAP_GEOCODE_RESULT]\n" + f"⚠️ 地理编码出错: {str(e)}"
 
 
 amap_geocode_tool = StructuredTool.from_function(

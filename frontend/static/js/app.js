@@ -663,8 +663,15 @@ function formatContent(text) {
     
     processedText = text.replace(thinkAnswerRegex, function(match, thinkingContent, answerContent) {
         hasThinkingBlock = true;
-        // 将思考内容包裹在特殊标记中，后续由 CSS 样式化
-        return '<div class="thinking-block"><div class="thinking-label">💭 思考过程</div><div class="thinking-content">' + thinkingContent + '</div></div><div class="answer-block">' + answerContent + '</div>';
+        // 思考块默认折叠，点击可展开/收起
+        return '<div class="thinking-block thinking-collapsed">' +
+            '<div class="thinking-label" onclick="toggleThinking(this)">' +
+                '<span class="thinking-toggle-icon">▶</span>' +
+                '💭 思考过程（点击展开）' +
+            '</div>' +
+            '<div class="thinking-content" style="display:none;">' + thinkingContent + '</div>' +
+            '</div>' +
+            '<div class="answer-block">' + answerContent + '</div>';
     });
     
     // 如果没有找到标签但有【思考】，说明只有思考没有回答（异常情况，全部作为正常内容）
@@ -685,12 +692,100 @@ function formatContent(text) {
                 return code;
             }
         });
-        return marked.parse(processedText);
+        // === 容错渲染：预处理常见格式问题 ===
+        
+        // 1. 未闭合代码块自动补全
+        const codeBlockCount = (processedText.match(/```/g) || []).length;
+        if (codeBlockCount % 2 === 1) {
+            processedText += '\n```';
+        }
+        
+        // 2. Markdown 表格修复（处理多种 LLM 输出的异常格式）
+        const lines = processedText.split('\n');
+        let inTable = false;
+        let lastPipeLineIdx = -1;
+        let headerColCount = 0;
+        
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            const trimmedLine = line.trim();
+            
+            // 检测以 | 开头的表格行（表头或数据行）
+            if (trimmedLine.startsWith('|') && trimmedLine.includes('|')) {
+                if (!inTable) {
+                    // 表头行 → 表格开始
+                    inTable = true;
+                    lastPipeLineIdx = i;
+                    headerColCount = (trimmedLine.match(/\|/g) || []).length - 1;
+                }
+                // 已在表格内的 | 行是正常数据行，无需处理
+            } else if (inTable) {
+                // 在表格内部遇到了非 | 开头的行 → 判断类型
+                
+                // 类型 A: 纯横线分隔行（LLM 常见错误格式）
+                // 匹配：--------、----------、---:--- 等（无管道符的纯横线/冒号+横线）
+                const isPureDashLine = /^[−\-:·]{3,}\s*$/.test(trimmedLine) && 
+                                       !trimmedLine.includes('|') &&
+                                       trimmedLine.length >= 3;
+                
+                if (isPureDashLine) {
+                    // 纯横线 → 根据表头列数补全为合法 GFM 分隔行
+                    if (headerColCount > 0) {
+                        lines[i] = '|' + ' --- |'.repeat(headerColCount);
+                    }
+                } else if (trimmedLine === '') {
+                    // 空行 → 表格结束
+                    inTable = false;
+                    lastPipeLineIdx = -1;
+                }
+                // 其他内容（如文本段落）保持不变，表格自然结束
+            }
+        }
+        processedText = lines.join('\n');
+        
+        // 3. 清理工具返回值的标记前缀（不在代码块内的 [XXX_RESULT] 标记）
+        // 这些标记是给 LLM 看的，不应该显示给用户
+        processedText = processedText.replace(
+            /^\[(WEATHER_RESULT|EXCHANGE_RESULT|VISA_RESULT|AMAP_POI_RESULT|AMAP_ROUTE_RESULT|AMAP_GEOCODE_RESULT|SEARCH_RESULT)\]\n/gm, 
+            ''
+        );
+        // 所有链接在新标签页打开，避免覆盖当前页面
+        let html = marked.parse(processedText);
+        html = html.replace(/<a /g, '<a target="_blank" rel="noopener noreferrer" ');
+        return html;
     }
     // 降级处理：如果没有加载 marked 库
-    return processedText
+    // 降级处理中也清理工具标记 + 链接新标签页
+    processedText = processedText.replace(
+        /^\[(WEATHER_RESULT|EXCHANGE_RESULT|VISA_RESULT|AMAP_POI_RESULT|AMAP_ROUTE_RESULT|AMAP_GEOCODE_RESULT|SEARCH_RESULT)\]\n/gm, 
+        ''
+    );
+    let fallbackHtml = processedText
         .replace(/\n/g, "<br>")
         .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+    fallbackHtml = fallbackHtml.replace(/<a /g, '<a target="_blank" rel="noopener noreferrer" ');
+    return fallbackHtml;
+}
+
+// ====== 思考块折叠/展开切换 ======
+function toggleThinking(labelElement) {
+    const block = labelElement.closest('.thinking-block');
+    const content = block.querySelector('.thinking-content');
+    const icon = labelElement.querySelector('.thinking-toggle-icon');
+    
+    if (block.classList.contains('thinking-collapsed')) {
+        // 展开
+        block.classList.remove('thinking-collapsed');
+        content.style.display = '';
+        icon.textContent = '▼';
+        labelElement.innerHTML = '<span class="thinking-toggle-icon">▼</span>💭 思考过程（点击收起）';
+    } else {
+        // 折叠
+        block.classList.add('thinking-collapsed');
+        content.style.display = 'none';
+        icon.textContent = '▶';
+        labelElement.innerHTML = '<span class="thinking-toggle-icon">▶</span>💭 思考过程（点击展开）';
+    }
 }
 
 // ====== 导出功能 ======
