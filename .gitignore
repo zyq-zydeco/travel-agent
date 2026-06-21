@@ -29,3 +29,6 @@ Thumbs.db
 
 # Trae IDE 规范文档（本地开发使用，无需上传）
 .trae/
+
+#Agent架构
+AgentsCooperate/
